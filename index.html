@@ -106,6 +106,11 @@
       .metrics{grid-template-columns:repeat(3,1fr)}
     }
   </style>
+</head>
+<body>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
   <div class="app">
     <div class="top">
@@ -156,9 +161,9 @@
         <div class="feedback" id="feedback"></div>
       </div>
 
-      <div class="near">
+      <div class="near" id="nearAlert">
         <strong>🍺 Kámoš chlastá poblíž</strong>
-        <div class="mini" style="margin-top:4px">Aktivuje se, až budou připojené živé polohy přes Firebase.</div>
+        <div class="mini" id="nearText" style="margin-top:4px">Zatím nikdo poblíž nesdílí polohu.</div>
       </div>
     </section>
 
@@ -202,7 +207,7 @@
     </section>
 
     <section class="screen" data-screen="map">
-      <div class="section-title"><h2>📍 Mapa</h2><div class="mini">Živá poloha bude fungovat po připojení backendu.</div></div>
+      <div class="section-title"><h2>📍 Mapa</h2><div class="mini">Živá poloha členů přes Firebase.</div></div>
       <div class="card">
         <label class="switch"><input type="checkbox" id="shareLocation"> <span>Sdílet moji polohu</span></label>
         <div class="mini" id="locStatus" style="margin-top:8px">Poloha není zapnutá.</div>
@@ -210,9 +215,10 @@
       <div class="mapbox" style="margin-top:12px">
         <div class="mapgrid"></div>
         <div class="pin me" style="left:50%;top:52%" id="mePin">📍 Ty</div>
-        <div class="pin" style="left:27%;top:33%">Štof · bez živé polohy</div>
-        <div class="pin" style="left:71%;top:67%">Dejv · bez živé polohy</div>
-        <div class="pin" style="left:64%;top:26%">Hnilda · bez živé polohy</div>
+        <div class="pin" style="left:27%;top:33%" id="pin-Štof">Štof · offline</div>
+        <div class="pin" style="left:71%;top:67%" id="pin-Dejv">Dejv · offline</div>
+        <div class="pin" style="left:64%;top:26%" id="pin-Hnilda">Hnilda · offline</div>
+        <div class="pin" style="left:38%;top:72%" id="pin-Domes">Domes · offline</div>
       </div>
       <div class="card" style="margin-top:12px">
         <h3>Upozornění v okolí</h3>
@@ -269,6 +275,21 @@
 
 <script>
 (() => {
+  const firebaseConfig = {
+    apiKey: "AIzaSyA8UyrcuinhwzNXWc1aGzCsbBuHR0b74gw",
+    authDomain: "lm-alkoliga-2026.firebaseapp.com",
+    projectId: "lm-alkoliga-2026",
+    storageBucket: "lm-alkoliga-2026.firebasestorage.app",
+    messagingSenderId: "734729842349",
+    appId: "1:734729842349:web:7e0ca2fc28e672de29a024",
+    measurementId: "G-2CHVFE61XE"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const entriesRef = db.collection("entries");
+  const sosRef = db.collection("status").doc("sos");
+  const locationsRef = db.collection("locations");
+
   const PLAYERS = ["Štof","Dejv","Hnilda","Domes"];
   const defs = {
     beer:{
@@ -316,7 +337,7 @@
 
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const save = () => localStorage.setItem("alkoliga_entries", JSON.stringify(state.entries));
+  const saveCache = () => localStorage.setItem("alkoliga_entries", JSON.stringify(state.entries));
   const fmt = n => Number(n).toLocaleString("cs-CZ",{maximumFractionDigits:2});
 
   function startOfWeek(d){
@@ -369,9 +390,13 @@
       points:d.points(state.a,state.b),label:d.label(state.a,state.b),
       ts:new Date().toISOString()
     };
-    state.entries.unshift(entry); save();
-    $("#feedback").textContent=`✓ Zapsáno: ${entry.label} · +${fmt(entry.points)} b`;
-    renderAll();
+    $("#addDrink").disabled=true;
+    entriesRef.doc(entry.id).set(entry).then(()=>{
+      $("#feedback").textContent=`✓ Zapsáno: ${entry.label} · +${fmt(entry.points)} b`;
+    }).catch(err=>{
+      $("#feedback").textContent="⚠️ Zápis se nepodařilo uložit. Zkontroluj internet nebo Firestore Rules.";
+      console.error(err);
+    }).finally(()=>$("#addDrink").disabled=false);
   });
 
   function sumPoints(entries){return entries.reduce((s,e)=>s+e.points,0)}
@@ -482,7 +507,7 @@
     state.entries.slice(0,80).forEach(e=>{
       const div=document.createElement("div");div.className="history-item";
       div.innerHTML=`<div><strong>${e.player}</strong> · ${e.label}<div class="mini">${new Date(e.ts).toLocaleString("cs-CZ")}</div></div><div class="row"><strong>+${fmt(e.points)} b</strong><button class="del">Smazat</button></div>`;
-      div.querySelector(".del").addEventListener("click",()=>{state.entries=state.entries.filter(x=>x.id!==e.id);save();renderAll()});
+      div.querySelector(".del").addEventListener("click",()=>{entriesRef.doc(e.id).delete().catch(err=>{console.error(err);alert("Smazání se nepodařilo.")})});
       h.appendChild(div);
     });
   }
@@ -527,34 +552,116 @@
   ["mousedown","touchstart","pointerdown"].forEach(ev=>sosBtn.addEventListener(ev,beginHold,{passive:true}));
   ["mouseup","mouseleave","touchend","touchcancel","pointerup","pointercancel"].forEach(ev=>sosBtn.addEventListener(ev,cancelHold,{passive:true}));
 
-  function activateSOS(){
+  function showSOS(data){
     $("#sosOverlay").classList.add("active");
-    $("#sosWho").textContent=`${state.player||"Hráč"} potřebuje pomoc`;
-    $("#sosReply").textContent="";
-    startSiren();
-    if(navigator.geolocation){
-      navigator.geolocation.getCurrentPosition(pos=>{
-        const lat=pos.coords.latitude.toFixed(5),lon=pos.coords.longitude.toFixed(5);
-        $("#sosLocation").textContent=`📍 ${lat}, ${lon}`;
-      },()=>{$("#sosLocation").textContent="📍 Poloha není dostupná."},{enableHighAccuracy:true,timeout:8000});
-    } else $("#sosLocation").textContent="📍 Poloha není dostupná.";
+    $("#sosWho").textContent=`${data.player||"Hráč"} potřebuje pomoc`;
+    $("#sosReply").textContent=data.reply||"";
+    if(Number.isFinite(data.lat) && Number.isFinite(data.lon)){
+      $("#sosLocation").textContent=`📍 ${data.lat.toFixed(5)}, ${data.lon.toFixed(5)}`;
+    } else {
+      $("#sosLocation").textContent="📍 Poloha není dostupná.";
+    }
+    if(!audioCtx) startSiren();
   }
 
-  $("#rideBtn").addEventListener("click",()=>$("#sosReply").textContent="🚗 Reakce „Jedu za tebou“ je připravená pro synchronizaci přes Firebase.");
-  $("#callBtn").addEventListener("click",()=>$("#sosReply").textContent="📞 Do finální verze se doplní telefonní čísla hráčů.");
-  $("#endSOS").addEventListener("click",()=>{$("#sosOverlay").classList.remove("active");stopSiren()});
+  function activateSOS(){
+    const publish=(lat=null,lon=null)=>{
+      const data={active:true,player:state.player||"Hráč",lat,lon,reply:"",ts:new Date().toISOString()};
+      showSOS(data);
+      sosRef.set(data).catch(err=>console.error("SOS sync",err));
+    };
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(pos=>publish(pos.coords.latitude,pos.coords.longitude),()=>publish(),{enableHighAccuracy:true,timeout:8000});
+    } else publish();
+  }
 
+  $("#rideBtn").addEventListener("click",()=>sosRef.set({reply:`🚗 ${state.player||"Někdo"} jede za tebou`},{merge:true}).catch(console.error));
+  $("#callBtn").addEventListener("click",()=>$("#sosReply").textContent="📞 Do finální verze se doplní telefonní čísla hráčů.");
+  $("#endSOS").addEventListener("click",()=>{sosRef.set({active:false,endedBy:state.player||"Hráč",endedAt:new Date().toISOString()},{merge:true}).catch(console.error);});
+
+  let locationWatchId=null;
+  const liveLocations={};
+  function haversine(a,b){
+    const R=6371000, rad=x=>x*Math.PI/180;
+    const dLat=rad(b.lat-a.lat), dLon=rad(b.lon-a.lon);
+    const x=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.sqrt(x));
+  }
+  function nearLimit(){
+    const v=$("#nearDistance").value;
+    return {"250 m":250,"500 m":500,"1 km":1000,"3 km":3000}[v]||0;
+  }
+  function refreshLocationUI(){
+    PLAYERS.forEach((p,i)=>{
+      const pin=document.getElementById(`pin-${p}`);
+      if(!pin) return;
+      if(p===state.player){pin.style.display="none";return;}
+      pin.style.display="block";
+      const loc=liveLocations[p];
+      if(loc && Date.now()-new Date(loc.ts).getTime()<15*60*1000) pin.textContent=`${p} · online`;
+      else pin.textContent=`${p} · offline`;
+    });
+    const me=liveLocations[state.player];
+    const limit=nearLimit();
+    if(!me || !limit){$("#nearText").textContent=limit?"Zapni sdílení polohy, ať můžeme hledat kámoše poblíž.":"Upozornění na blízkost je vypnuté.";return;}
+    const nearby=PLAYERS.filter(p=>p!==state.player && liveLocations[p])
+      .map(p=>({p,d:haversine(me,liveLocations[p])}))
+      .filter(x=>x.d<=limit)
+      .sort((a,b)=>a.d-b.d);
+    $("#nearText").textContent=nearby.length?`${nearby[0].p} je asi ${Math.round(nearby[0].d)} m od tebe.`:"Zatím nikdo z party není v nastavené vzdálenosti.";
+  }
+
+  $("#nearDistance").addEventListener("change",refreshLocationUI);
   $("#shareLocation").addEventListener("change",e=>{
-    if(!e.target.checked){$("#locStatus").textContent="Poloha není zapnutá.";$("#mePin").textContent="📍 Ty";return}
-    if(!navigator.geolocation){$("#locStatus").textContent="Tento prohlížeč polohu nepodporuje.";e.target.checked=false;return}
-    navigator.geolocation.getCurrentPosition(pos=>{
-      const lat=pos.coords.latitude.toFixed(5),lon=pos.coords.longitude.toFixed(5);
-      $("#locStatus").textContent=`Aktuální poloha: ${lat}, ${lon}. V této verzi zůstává jen v tomto zařízení.`;
-      $("#mePin").textContent=`📍 ${state.player||"Ty"}`;
-    },()=>{$("#locStatus").textContent="Přístup k poloze nebyl povolen.";e.target.checked=false},{enableHighAccuracy:true,timeout:8000});
+    if(!e.target.checked){
+      if(locationWatchId!==null && navigator.geolocation) navigator.geolocation.clearWatch(locationWatchId);
+      locationWatchId=null;
+      if(state.player) locationsRef.doc(state.player).delete().catch(console.error);
+      $("#locStatus").textContent="Poloha není zapnutá.";
+      $("#mePin").textContent="📍 Ty";
+      return;
+    }
+    if(!state.player){$("#locStatus").textContent="Nejdřív vyber hráče.";e.target.checked=false;return;}
+    if(!navigator.geolocation){$("#locStatus").textContent="Tento prohlížeč polohu nepodporuje.";e.target.checked=false;return;}
+    locationWatchId=navigator.geolocation.watchPosition(pos=>{
+      const lat=pos.coords.latitude,lon=pos.coords.longitude;
+      $("#locStatus").textContent=`Sdílíš polohu: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      $("#mePin").textContent=`📍 ${state.player}`;
+      locationsRef.doc(state.player).set({player:state.player,lat,lon,accuracy:pos.coords.accuracy,ts:new Date().toISOString()}).catch(console.error);
+    },()=>{$("#locStatus").textContent="Přístup k poloze nebyl povolen.";e.target.checked=false},{enableHighAccuracy:true,maximumAge:10000,timeout:10000});
   });
+
+  const cachedBeforeFirebase=[...state.entries];
+  if(cachedBeforeFirebase.length && !localStorage.getItem("alkoliga_firebase_migrated")){
+    Promise.all(cachedBeforeFirebase.map(e=>entriesRef.doc(e.id || String(Date.now()+Math.random())).set(e,{merge:true})))
+      .then(()=>localStorage.setItem("alkoliga_firebase_migrated","1"))
+      .catch(err=>console.error("Migrace lokálních dat",err));
+  }
+
+  entriesRef.orderBy("ts","desc").limit(500).onSnapshot(snap=>{
+    state.entries=snap.docs.map(d=>({id:d.id,...d.data()}));
+    saveCache();
+    renderAll();
+  },err=>{
+    console.error("Firestore entries",err);
+    $("#feedback").textContent="⚠️ Firebase se nepodařilo načíst; zobrazuji poslední lokální data.";
+    renderAll();
+  });
+
+  sosRef.onSnapshot(doc=>{
+    const data=doc.exists?doc.data():null;
+    if(data?.active) showSOS(data);
+    else {$("#sosOverlay").classList.remove("active");stopSiren();}
+  },err=>console.error("SOS listener",err));
+
+  locationsRef.onSnapshot(snap=>{
+    Object.keys(liveLocations).forEach(k=>delete liveLocations[k]);
+    snap.forEach(doc=>{const d=doc.data(); if(d?.player && Number.isFinite(d.lat) && Number.isFinite(d.lon)) liveLocations[d.player]=d;});
+    refreshLocationUI();
+  },err=>console.error("Locations listener",err));
 
   renderOptions(); renderAll();
 })();
 </script>
+</body>
 </html>
