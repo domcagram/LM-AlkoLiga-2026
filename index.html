@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#171717" />
+  <title>AlkoLiga 2026</title>
+  <style>
+    :root{
+      --bg:#0d0d0f; --panel:#17171b; --panel2:#202026; --line:#2d2d34;
+      --text:#f6f4ef; --muted:#a7a3a0; --accent:#d89b2b; --accent2:#f0bd55;
+      --danger:#b91c1c; --danger2:#ef4444; --ok:#22c55e; --blue:#60a5fa;
+      --r:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+    .app{max-width:760px;margin:0 auto;min-height:100vh;padding:14px 14px 96px}
+    .top{position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg) 72%,transparent);padding:8px 0 12px}
+    .hero{background:linear-gradient(145deg,#1a1a1f,#121216);border:1px solid var(--line);border-radius:24px;padding:16px}
+    .row{display:flex;gap:10px;align-items:center}
+    .between{justify-content:space-between}
+    .muted{color:var(--muted)}
+    h1,h2,h3,p{margin:0}
+    h1{font-size:1.35rem}
+    h2{font-size:1.2rem}
+    h3{font-size:1.02rem}
+    .chip{display:inline-flex;align-items:center;gap:6px;background:#2a2418;border:1px solid #4a3820;color:#f3c96f;border-radius:999px;padding:6px 10px;font-size:.82rem}
+    .sosbtn{background:var(--danger);color:white;border:none;border-radius:16px;padding:13px 16px;font-weight:800;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
+    .sosbtn:active{transform:scale(.98)}
+    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+    .metric{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:12px}
+    .metric small{display:block;color:var(--muted);font-size:.74rem}
+    .metric strong{display:block;font-size:1.25rem;margin-top:4px}
+    .screen{display:none;padding-top:12px}
+    .screen.active{display:block}
+    .section-title{margin:6px 2px 12px}
+    .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+    .drink{min-height:124px;text-align:left;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;padding:15px}
+    .drink.active{border-color:var(--accent);background:#211b11}
+    .drink .emoji{font-size:2rem;margin-bottom:16px}
+    .drink small{color:var(--muted)}
+    .choice{width:100%;background:transparent;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:12px}
+    .choice.active{border-color:var(--accent);background:#211b11;color:#ffd98f}
+    .primary{width:100%;border:0;border-radius:16px;background:var(--accent);color:#17110a;padding:15px;font-weight:900}
+    .danger{width:100%;border:0;border-radius:16px;background:var(--danger);color:white;padding:14px;font-weight:800}
+    .ghost{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:13px;padding:10px 12px}
+    .feedback{min-height:20px;text-align:center;color:#f2cf8a;font-size:.88rem;margin-top:8px}
+    .near{margin-top:12px;border:1px solid #5d431d;background:#221a0e;border-radius:16px;padding:13px}
+    .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 12px}
+    .tab{background:transparent;color:var(--muted);border:1px solid var(--line);padding:8px 11px;border-radius:999px}
+    .tab.active{color:#17110a;background:var(--accent);border-color:var(--accent)}
+    .playerstat{padding:14px 0;border-bottom:1px solid var(--line)}
+    .playerstat:last-child{border-bottom:0}
+    .statrow{display:grid;grid-template-columns:1.1fr repeat(4,.8fr);gap:8px;font-size:.86rem;align-items:center}
+    .statrow strong{font-size:.9rem}
+    .legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:.78rem;margin-top:8px}
+    .dot{width:8px;height:8px;border-radius:99px;display:inline-block;margin-right:5px}
+    .rank{display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}
+    .rank:last-child{border-bottom:0}
+    .rank .place{font-size:1.3rem;width:34px}
+    .rank .grow{flex:1}
+    .history-item{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+    .history-item:last-child{border-bottom:0}
+    .mini{font-size:.8rem;color:var(--muted)}
+    .del{background:transparent;color:#fda4af;border:1px solid #5a2b31;border-radius:10px;padding:7px 9px}
+    .mapbox{height:260px;border:1px dashed #4b5563;border-radius:18px;background:
+      radial-gradient(circle at 28% 35%,rgba(216,155,43,.18),transparent 15%),
+      radial-gradient(circle at 70% 62%,rgba(96,165,250,.13),transparent 13%),
+      linear-gradient(35deg,#141418,#1a1a20);
+      position:relative;overflow:hidden}
+    .mapgrid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:28px 28px}
+    .pin{position:absolute;transform:translate(-50%,-50%);padding:7px 9px;border-radius:999px;background:#151519;border:1px solid var(--line);font-size:.8rem;white-space:nowrap}
+    .pin.me{border-color:var(--accent);color:#ffd98f}
+    .switch{display:flex;gap:10px;align-items:center}
+    .switch input{width:20px;height:20px;accent-color:var(--accent)}
+    .bottom{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);width:min(732px,calc(100% - 20px));z-index:30;background:rgba(23,23,27,.96);backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:20px;padding:6px;display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+    .nav{background:transparent;border:0;color:var(--muted);border-radius:14px;padding:9px 4px;font-size:.72rem}
+    .nav .ico{display:block;font-size:1.1rem;margin-bottom:2px}
+    .nav.active{background:#292114;color:#ffd98f}
+    .overlay{position:fixed;inset:0;display:none;z-index:1000;background:rgba(70,0,0,.96);color:white;align-items:center;justify-content:center;padding:18px}
+    .overlay.active{display:flex;animation:sospulse 1.2s ease-in-out infinite alternate}
+    @keyframes sospulse{from{background:rgba(75,0,0,.96)}to{background:rgba(175,0,0,.98)}}
+    @media (prefers-reduced-motion:reduce){.overlay.active{animation:none}}
+    .soscard{width:min(520px,100%);text-align:center}
+    .sosicon{font-size:4rem}
+    .soscard h2{font-size:2rem;margin:8px 0}
+    .sos-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+    .sos-action{border:1px solid rgba(255,255,255,.28);background:rgba(0,0,0,.18);color:white;border-radius:16px;padding:14px;font-weight:800}
+    .sos-end{margin-top:16px;background:white;color:#661010;border:0;border-radius:16px;padding:14px;width:100%;font-weight:900}
+    .hold{font-size:.75rem;color:#fecaca;margin-top:5px}
+    .modal{position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:18px}
+    .modal.hidden{display:none}
+    .modal-card{width:min(440px,100%);background:#17171b;border:1px solid var(--line);border-radius:22px;padding:18px}
+    .playerpick{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+    .playerpick button{background:#202026;border:1px solid var(--line);color:var(--text);border-radius:15px;padding:16px}
+    .empty{color:var(--muted);text-align:center;padding:22px 0}
+    select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:9px}
+    svg text{fill:var(--muted);font-size:10px}
+    @media(max-width:520px){
+      .statrow{grid-template-columns:1fr 1fr 1fr}
+      .statrow .hide-sm{display:none}
+      .metrics{grid-template-columns:repeat(3,1fr)}
+    }
+  </style>
+
+  <div class="app">
+    <div class="top">
+      <div class="hero">
+        <div class="row between">
+          <div>
+            <div class="mini" id="todayLabel"></div>
+            <h1 id="hello">AlkoLiga 2026 🍺</h1>
+          </div>
+          <div>
+            <button class="sosbtn" id="sosHold">🆘 SOS</button>
+            <div class="hold">podrž 2 s</div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><small>Dnes</small><strong id="mToday">0 b</strong></div>
+          <div class="metric"><small>Tento týden</small><strong id="mWeek">0 b</strong></div>
+          <div class="metric"><small>Pořadí</small><strong id="mRank">#–</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <section class="screen active" data-screen="add">
+      <div class="section-title">
+        <h2>Co právě padlo?</h2>
+        <p class="muted mini">Jedno klepnutí, minimum přemýšlení.</p>
+      </div>
+
+      <div class="grid2" id="drinkTypes">
+        <button class="drink active" data-type="beer"><div class="emoji">🍺</div><strong>Pivo</strong><br><small>10° · 11° · 12°</small></button>
+        <button class="drink" data-type="shot"><div class="emoji">🥃</div><strong>Panák</strong><br><small>0,02 · 0,04 · 0,05</small></button>
+        <button class="drink" data-type="wine"><div class="emoji">🍷</div><strong>Víno</strong><br><small>2 dcl · láhev</small></button>
+        <button class="drink" data-type="prosecco"><div class="emoji">🥂</div><strong>Prosecco</strong><br><small>2 dcl · láhev</small></button>
+        <button class="drink" data-type="spirit"><div class="emoji">🍾</div><strong>Flaška 0,5 l</strong><br><small>vodka · rum · pálenka</small></button>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="row between">
+          <div>
+            <h3 id="selectionTitle">🍺 Pivo</h3>
+            <div class="mini">Vyber variantu a velikost</div>
+          </div>
+          <span class="chip" id="pointsChip">+3 body</span>
+        </div>
+        <div id="optionA" class="grid3" style="margin-top:12px"></div>
+        <div id="optionB" class="grid2" style="margin-top:8px"></div>
+        <button class="primary" id="addDrink" style="margin-top:12px">+ ZAPSAT PITÍ</button>
+        <div class="feedback" id="feedback"></div>
+      </div>
+
+      <div class="near">
+        <strong>🍺 Kámoš chlastá poblíž</strong>
+        <div class="mini" style="margin-top:4px">Aktivuje se, až budou připojené živé polohy přes Firebase.</div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="stats">
+      <div class="row between section-title">
+        <div><h2>Statistiky</h2><div class="mini">Spotřeba po hráčích</div></div>
+        <select id="period">
+          <option value="today">Dnes</option>
+          <option value="week">Týden</option>
+          <option value="month" selected>Měsíc</option>
+          <option value="all">Celkem</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="statrow mini" style="padding-bottom:10px">
+          <strong>Hráč</strong><strong>🍺 Pivo</strong><strong>🥃 Panák</strong><strong class="hide-sm">🍷 Víno</strong><strong class="hide-sm">🥂 Prosecco</strong>
+        </div>
+        <div id="playerStats"></div>
+      </div>
+
+      <div class="grid2" style="margin-top:12px">
+        <div class="metric"><small>Průměr piva / den / os.</small><strong id="avgBeer">0</strong></div>
+        <div class="metric"><small>Nejvíc propitý den</small><strong id="bestDay">–</strong></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="row between"><h3>📈 Průběžné body</h3><span class="mini">kumulativně</span></div>
+        <svg id="chart" viewBox="0 0 640 230" style="width:100%;height:auto;margin-top:8px" aria-label="Kumulativní průběh bodů"></svg>
+        <div class="legend" id="legend"></div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="league">
+      <div class="section-title"><h2>🏆 Liga</h2><div class="mini">Celkové bodové pořadí</div></div>
+      <div class="card" id="ranking"></div>
+      <div class="card" style="margin-top:12px">
+        <h3>🔥 Nejvíc propité dny</h3>
+        <div id="daysRanking" style="margin-top:8px"></div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="map">
+      <div class="section-title"><h2>📍 Mapa</h2><div class="mini">Živá poloha bude fungovat po připojení backendu.</div></div>
+      <div class="card">
+        <label class="switch"><input type="checkbox" id="shareLocation"> <span>Sdílet moji polohu</span></label>
+        <div class="mini" id="locStatus" style="margin-top:8px">Poloha není zapnutá.</div>
+      </div>
+      <div class="mapbox" style="margin-top:12px">
+        <div class="mapgrid"></div>
+        <div class="pin me" style="left:50%;top:52%" id="mePin">📍 Ty</div>
+        <div class="pin" style="left:27%;top:33%">Štof · bez živé polohy</div>
+        <div class="pin" style="left:71%;top:67%">Dejv · bez živé polohy</div>
+        <div class="pin" style="left:64%;top:26%">Hnilda · bez živé polohy</div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <h3>Upozornění v okolí</h3>
+        <div class="row between" style="margin-top:10px">
+          <span class="mini">Upozorni mě do vzdálenosti</span>
+          <select id="nearDistance">
+            <option>250 m</option><option>500 m</option><option selected>1 km</option><option>3 km</option><option>Vypnuto</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="history">
+      <div class="section-title"><h2>📜 Historie</h2><div class="mini">Poslední zápisy</div></div>
+      <div class="card" id="history"></div>
+    </section>
+  </div>
+
+  <nav class="bottom">
+    <button class="nav active" data-target="add"><span class="ico">➕</span>Zapsat</button>
+    <button class="nav" data-target="stats"><span class="ico">📊</span>Statistiky</button>
+    <button class="nav" data-target="league"><span class="ico">🏆</span>Liga</button>
+    <button class="nav" data-target="map"><span class="ico">📍</span>Mapa</button>
+    <button class="nav" data-target="history"><span class="ico">📜</span>Historie</button>
+  </nav>
+
+  <div class="overlay" id="sosOverlay" aria-live="assertive">
+    <div class="soscard">
+      <div class="sosicon">🆘</div>
+      <h2>SOS AKTIVNÍ</h2>
+      <p id="sosWho">Potřebuješ pomoc</p>
+      <p class="mini" id="sosLocation" style="color:#fecaca;margin-top:8px">Poloha se zjišťuje…</p>
+      <div class="sos-actions">
+        <button class="sos-action" id="rideBtn">🚗 JEDU ZA TEBOU</button>
+        <button class="sos-action" id="callBtn">📞 ZAVOLAT</button>
+      </div>
+      <div class="mini" id="sosReply" style="color:#fff;margin-top:12px"></div>
+      <button class="sos-end" id="endSOS">✅ JSEM V POŘÁDKU – UKONČIT SOS</button>
+    </div>
+  </div>
+
+  <div class="modal" id="playerModal">
+    <div class="modal-card">
+      <h2>Kdo jsi?</h2>
+      <p class="muted" style="margin-top:6px">Vyber si hráče. Volbu můžeš později změnit vymazáním dat prohlížeče.</p>
+      <div class="playerpick">
+        <button data-player="Štof">Štof</button>
+        <button data-player="Dejv">Dejv</button>
+        <button data-player="Hnilda">Hnilda</button>
+        <button data-player="Domes">Domes</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const PLAYERS = ["Štof","Dejv","Hnilda","Domes"];
+  const defs = {
+    beer:{
+      title:"🍺 Pivo",
+      a:[["10°","10"],["11°","11"],["12°","12"]],
+      b:[["0,3 l","0.3"],["0,5 l","0.5"]],
+      points:(a,b)=>({"10|0.3":1,"10|0.5":2,"11|0.3":1.5,"11|0.5":2.5,"12|0.3":2,"12|0.5":3}[a+"|"+b]),
+      label:(a,b)=>`🍺 Pivo ${a}° · ${b.replace(".",",")} l`
+    },
+    shot:{
+      title:"🥃 Panák",
+      a:[],
+      b:[["0,02 l","0.02"],["0,04 l","0.04"],["0,05 l","0.05"]],
+      points:(a,b)=>({"0.02":1,"0.04":2,"0.05":2.5}[b]),
+      label:(a,b)=>`🥃 Panák · ${b.replace(".",",")} l`
+    },
+    wine:{
+      title:"🍷 Víno",
+      a:[],
+      b:[["0,2 l","0.2"],["láhev 0,75 l","0.75"]],
+      points:(a,b)=>b==="0.2"?2.5:9,
+      label:(a,b)=>`🍷 Víno · ${b==="0.75"?"láhev 0,75 l":"0,2 l"}`
+    },
+    prosecco:{
+      title:"🥂 Prosecco",
+      a:[],
+      b:[["0,2 l","0.2"],["láhev 0,75 l","0.75"]],
+      points:(a,b)=>b==="0.2"?2:8,
+      label:(a,b)=>`🥂 Prosecco · ${b==="0.75"?"láhev 0,75 l":"0,2 l"}`
+    },
+    spirit:{
+      title:"🍾 Flaška 0,5 l",
+      a:[["Vodka","Vodka"],["Rum","Rum"],["Pálenka","Pálenka"]],
+      b:[["0,5 l","0.5"]],
+      points:()=>25,
+      label:(a,b)=>`🍾 ${a} · 0,5 l`
+    }
+  };
+
+  const state = {
+    player: localStorage.getItem("alkoliga_player") || "",
+    entries: JSON.parse(localStorage.getItem("alkoliga_entries") || "[]"),
+    type:"beer", a:"12", b:"0.5"
+  };
+
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
+  const save = () => localStorage.setItem("alkoliga_entries", JSON.stringify(state.entries));
+  const fmt = n => Number(n).toLocaleString("cs-CZ",{maximumFractionDigits:2});
+
+  function startOfWeek(d){
+    const x=new Date(d); const day=(x.getDay()+6)%7;
+    x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x;
+  }
+  function inPeriod(ts,p){
+    const d=new Date(ts), now=new Date();
+    if(p==="all") return true;
+    if(p==="today") return d.toDateString()===now.toDateString();
+    if(p==="week") return d>=startOfWeek(now);
+    if(p==="month") return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
+    return true;
+  }
+
+  function renderOptions(){
+    const d=defs[state.type];
+    $("#selectionTitle").textContent=d.title;
+    const aBox=$("#optionA"), bBox=$("#optionB");
+    aBox.innerHTML=""; bBox.innerHTML="";
+    if(!d.a.length) aBox.style.display="none"; else {
+      aBox.style.display="grid";
+      d.a.forEach(([label,val])=>{
+        const b=document.createElement("button"); b.className="choice"+(state.a===val?" active":""); b.textContent=label;
+        b.addEventListener("click",()=>{state.a=val;renderOptions()}); aBox.appendChild(b);
+      });
+      if(!d.a.some(x=>x[1]===state.a)) state.a=d.a[0][1];
+    }
+    d.b.forEach(([label,val])=>{
+      const b=document.createElement("button"); b.className="choice"+(state.b===val?" active":""); b.textContent=label;
+      b.addEventListener("click",()=>{state.b=val;renderOptions()}); bBox.appendChild(b);
+    });
+    if(!d.b.some(x=>x[1]===state.b)) state.b=d.b[0][1];
+    $("#pointsChip").textContent="+"+fmt(d.points(state.a,state.b))+" b";
+  }
+
+  $$(".drink").forEach(btn=>btn.addEventListener("click",()=>{
+    $$(".drink").forEach(x=>x.classList.remove("active")); btn.classList.add("active");
+    state.type=btn.dataset.type;
+    const d=defs[state.type]; state.a=d.a[0]?.[1] || ""; state.b=d.b[0][1];
+    renderOptions();
+  }));
+
+  $("#addDrink").addEventListener("click",()=>{
+    if(!state.player) return;
+    const d=defs[state.type];
+    const entry={
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()+Math.random()),
+      player:state.player,type:state.type,a:state.a,b:state.b,
+      points:d.points(state.a,state.b),label:d.label(state.a,state.b),
+      ts:new Date().toISOString()
+    };
+    state.entries.unshift(entry); save();
+    $("#feedback").textContent=`✓ Zapsáno: ${entry.label} · +${fmt(entry.points)} b`;
+    renderAll();
+  });
+
+  function sumPoints(entries){return entries.reduce((s,e)=>s+e.points,0)}
+  function rankAll(){
+    return PLAYERS.map(p=>({player:p,points:sumPoints(state.entries.filter(e=>e.player===p))}))
+      .sort((a,b)=>b.points-a.points);
+  }
+  function renderHeader(){
+    const now=new Date();
+    $("#todayLabel").textContent=now.toLocaleDateString("cs-CZ",{weekday:"long",day:"numeric",month:"long"});
+    $("#hello").textContent=state.player?`Nazdar, ${state.player} 🍺`:"AlkoLiga 2026 🍺";
+    const mine=state.entries.filter(e=>e.player===state.player);
+    $("#mToday").textContent=fmt(sumPoints(mine.filter(e=>inPeriod(e.ts,"today"))))+" b";
+    $("#mWeek").textContent=fmt(sumPoints(mine.filter(e=>inPeriod(e.ts,"week"))))+" b";
+    const r=rankAll().findIndex(x=>x.player===state.player);
+    $("#mRank").textContent=r>=0?"#"+(r+1):"#–";
+  }
+
+  function amountSummary(entries,type){
+    const x=entries.filter(e=>e.type===type);
+    if(type==="beer") return `${x.length} ks / ${fmt(x.reduce((s,e)=>s+Number(e.b),0))} l`;
+    if(type==="shot") return `${x.length} ks / ${fmt(x.reduce((s,e)=>s+Number(e.b),0))} l`;
+    if(type==="wine"||type==="prosecco") return `${fmt(x.reduce((s,e)=>s+Number(e.b),0))} l`;
+    if(type==="spirit") return `${x.length}× 0,5 l`;
+    return "0";
+  }
+
+  function renderStats(){
+    const p=$("#period").value;
+    const box=$("#playerStats"); box.innerHTML="";
+    const filtered=state.entries.filter(e=>inPeriod(e.ts,p));
+    PLAYERS.forEach(player=>{
+      const mine=filtered.filter(e=>e.player===player);
+      const row=document.createElement("div"); row.className="playerstat statrow";
+      row.innerHTML=`<strong>${player}</strong><span>${amountSummary(mine,"beer")}</span><span>${amountSummary(mine,"shot")}</span><span class="hide-sm">${amountSummary(mine,"wine")}</span><span class="hide-sm">${amountSummary(mine,"prosecco")}</span>`;
+      box.appendChild(row);
+      const extra=document.createElement("div"); extra.className="mini"; extra.style.marginTop="6px";
+      extra.textContent=`🍾 Flašky: ${amountSummary(mine,"spirit")} · 🏆 ${fmt(sumPoints(mine))} b`;
+      box.appendChild(extra);
+    });
+
+    const beers=filtered.filter(e=>e.type==="beer");
+    const days = p==="today" ? 1 : Math.max(1,new Set(filtered.map(e=>new Date(e.ts).toDateString())).size);
+    $("#avgBeer").textContent=fmt(beers.length/(days*PLAYERS.length));
+
+    const byDay={};
+    filtered.forEach(e=>{const k=new Date(e.ts).toLocaleDateString("cs-CZ");byDay[k]=(byDay[k]||0)+e.points});
+    const best=Object.entries(byDay).sort((a,b)=>b[1]-a[1])[0];
+    $("#bestDay").textContent=best?`${best[0]} · ${fmt(best[1])} b`:"–";
+    renderChart();
+  }
+
+  function renderChart(){
+    const svg=$("#chart"); svg.innerHTML="";
+    const W=640,H=230,pad=28;
+    const entries=[...state.entries].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    const dates=[...new Set(entries.map(e=>new Date(e.ts).toISOString().slice(0,10)))];
+    const seriesColors=["#d89b2b","#60a5fa","#34d399","#f472b6"];
+    let max=1;
+    const data=PLAYERS.map(player=>{
+      let acc=0;
+      const pts=dates.map(d=>{
+        acc += entries.filter(e=>e.player===player && e.ts.slice(0,10)===d).reduce((s,e)=>s+e.points,0);
+        max=Math.max(max,acc); return acc;
+      });
+      return {player,pts};
+    });
+    [0,.25,.5,.75,1].forEach(f=>{
+      const y=H-pad-f*(H-pad*2);
+      const line=document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("x1",pad);line.setAttribute("x2",W-pad);line.setAttribute("y1",y);line.setAttribute("y2",y);line.setAttribute("stroke","#303038");svg.appendChild(line);
+    });
+    if(dates.length<2){
+      const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+      t.setAttribute("x",W/2);t.setAttribute("y",H/2);t.setAttribute("text-anchor","middle");t.textContent="Graf se vykreslí po více dnech zápisů.";svg.appendChild(t);
+    } else {
+      data.forEach((s,i)=>{
+        const pts=s.pts.map((v,idx)=>{
+          const x=pad+idx*(W-pad*2)/(dates.length-1);
+          const y=H-pad-v/max*(H-pad*2);
+          return `${x},${y}`;
+        }).join(" ");
+        const pl=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+        pl.setAttribute("points",pts);pl.setAttribute("fill","none");pl.setAttribute("stroke",seriesColors[i]);pl.setAttribute("stroke-width","4");pl.setAttribute("stroke-linejoin","round");svg.appendChild(pl);
+      });
+    }
+    $("#legend").innerHTML=PLAYERS.map((p,i)=>`<span><i class="dot" style="background:${seriesColors[i]}"></i>${p}</span>`).join("");
+  }
+
+  function renderLeague(){
+    const r=rankAll();
+    $("#ranking").innerHTML=r.map((x,i)=>`<div class="rank"><div class="place">${["🥇","🥈","🥉","4."][i]}</div><div class="grow"><strong>${x.player}</strong><div class="mini">${i===0?"Průběžný lídr":" "}</div></div><strong>${fmt(x.points)} b</strong></div>`).join("");
+    const by={};
+    state.entries.forEach(e=>{
+      const k=e.player+"|"+e.ts.slice(0,10);
+      by[k]=(by[k]||0)+e.points;
+    });
+    const days=Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    $("#daysRanking").innerHTML=days.length?days.map(([k,v],i)=>{
+      const [p,d]=k.split("|"); return `<div class="rank"><div class="place">${i+1}.</div><div class="grow">${p}<div class="mini">${new Date(d+"T12:00:00").toLocaleDateString("cs-CZ")}</div></div><strong>${fmt(v)} b</strong></div>`;
+    }).join(""):`<div class="empty">Zatím žádné rekordní dny.</div>`;
+  }
+
+  function renderHistory(){
+    const h=$("#history");
+    if(!state.entries.length){h.innerHTML='<div class="empty">Zatím žádné zápisy.</div>';return;}
+    h.innerHTML="";
+    state.entries.slice(0,80).forEach(e=>{
+      const div=document.createElement("div");div.className="history-item";
+      div.innerHTML=`<div><strong>${e.player}</strong> · ${e.label}<div class="mini">${new Date(e.ts).toLocaleString("cs-CZ")}</div></div><div class="row"><strong>+${fmt(e.points)} b</strong><button class="del">Smazat</button></div>`;
+      div.querySelector(".del").addEventListener("click",()=>{state.entries=state.entries.filter(x=>x.id!==e.id);save();renderAll()});
+      h.appendChild(div);
+    });
+  }
+
+  function renderAll(){renderHeader();renderStats();renderLeague();renderHistory()}
+
+  $("#period").addEventListener("change",renderStats);
+  $$(".nav").forEach(b=>b.addEventListener("click",()=>{
+    $$(".nav").forEach(x=>x.classList.remove("active")); b.classList.add("active");
+    $$(".screen").forEach(x=>x.classList.remove("active")); document.querySelector(`[data-screen="${b.dataset.target}"]`).classList.add("active");
+  }));
+
+  $$("#playerModal [data-player]").forEach(b=>b.addEventListener("click",()=>{
+    state.player=b.dataset.player; localStorage.setItem("alkoliga_player",state.player);
+    $("#playerModal").classList.add("hidden"); renderAll();
+  }));
+  if(state.player) $("#playerModal").classList.add("hidden");
+
+  let audioCtx=null, sirenTimer=null, osc=null, gain=null;
+  function startSiren(){
+    try{
+      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      osc=audioCtx.createOscillator(); gain=audioCtx.createGain();
+      osc.type="sawtooth"; gain.gain.value=.08; osc.connect(gain); gain.connect(audioCtx.destination); osc.start();
+      let high=false;
+      sirenTimer=setInterval(()=>{high=!high;osc.frequency.setTargetAtTime(high?920:520,audioCtx.currentTime,.08)},420);
+    }catch(e){}
+  }
+  function stopSiren(){
+    clearInterval(sirenTimer);
+    try{osc&&osc.stop();audioCtx&&audioCtx.close()}catch(e){}
+    osc=gain=audioCtx=null;
+  }
+
+  let holdTimer=null, holdTriggered=false;
+  const sosBtn=$("#sosHold");
+  function beginHold(e){
+    holdTriggered=false;
+    holdTimer=setTimeout(()=>{holdTriggered=true;activateSOS()},2000);
+  }
+  function cancelHold(){clearTimeout(holdTimer)}
+  ["mousedown","touchstart","pointerdown"].forEach(ev=>sosBtn.addEventListener(ev,beginHold,{passive:true}));
+  ["mouseup","mouseleave","touchend","touchcancel","pointerup","pointercancel"].forEach(ev=>sosBtn.addEventListener(ev,cancelHold,{passive:true}));
+
+  function activateSOS(){
+    $("#sosOverlay").classList.add("active");
+    $("#sosWho").textContent=`${state.player||"Hráč"} potřebuje pomoc`;
+    $("#sosReply").textContent="";
+    startSiren();
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(pos=>{
+        const lat=pos.coords.latitude.toFixed(5),lon=pos.coords.longitude.toFixed(5);
+        $("#sosLocation").textContent=`📍 ${lat}, ${lon}`;
+      },()=>{$("#sosLocation").textContent="📍 Poloha není dostupná."},{enableHighAccuracy:true,timeout:8000});
+    } else $("#sosLocation").textContent="📍 Poloha není dostupná.";
+  }
+
+  $("#rideBtn").addEventListener("click",()=>$("#sosReply").textContent="🚗 Reakce „Jedu za tebou“ je připravená pro synchronizaci přes Firebase.");
+  $("#callBtn").addEventListener("click",()=>$("#sosReply").textContent="📞 Do finální verze se doplní telefonní čísla hráčů.");
+  $("#endSOS").addEventListener("click",()=>{$("#sosOverlay").classList.remove("active");stopSiren()});
+
+  $("#shareLocation").addEventListener("change",e=>{
+    if(!e.target.checked){$("#locStatus").textContent="Poloha není zapnutá.";$("#mePin").textContent="📍 Ty";return}
+    if(!navigator.geolocation){$("#locStatus").textContent="Tento prohlížeč polohu nepodporuje.";e.target.checked=false;return}
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const lat=pos.coords.latitude.toFixed(5),lon=pos.coords.longitude.toFixed(5);
+      $("#locStatus").textContent=`Aktuální poloha: ${lat}, ${lon}. V této verzi zůstává jen v tomto zařízení.`;
+      $("#mePin").textContent=`📍 ${state.player||"Ty"}`;
+    },()=>{$("#locStatus").textContent="Přístup k poloze nebyl povolen.";e.target.checked=false},{enableHighAccuracy:true,timeout:8000});
+  });
+
+  renderOptions(); renderAll();
+})();
+</script>
+</html>
