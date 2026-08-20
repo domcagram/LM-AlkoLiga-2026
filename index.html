@@ -183,7 +183,7 @@
 
       <div class="near" id="nearAlert">
         <strong>🍺 Kámoš chlastá poblíž</strong>
-        <div class="mini" id="nearText" style="margin-top:4px">Zapni sdílení polohy. Při vstupu kámoše do nastaveného okruhu zazní zvuk a telefon zavibruje.</div>
+        <div class="mini" id="nearText" style="margin-top:4px">Upozorníme při vstupu do 1,5 km nebo když se kámoš v okruhu nově objeví online. Stejný hráč tě znovu upozorní nejdřív za 1 hodinu.</div>
       </div>
     </section>
 
@@ -702,6 +702,7 @@
 
   let locationWatchId=null;
   const liveLocations={};
+  const locationSessionId=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+"-"+Math.random().toString(36).slice(2));
   function haversine(a,b){
     const R=6371000, rad=x=>x*Math.PI/180;
     const dLat=rad(b.lat-a.lat), dLon=rad(b.lon-a.lon);
@@ -713,22 +714,39 @@
     return {"1,5 km":1500}[v]||0;
   }
   const insideNearRadius=new Set();
+  const lastSeenSession={};
   let nearStateInitialized=false;
-  let nearAlertCooldownUntil=0;
   let nearToastTimer=null;
+  const NEAR_SPAM_MS=60*60*1000; // 1 hodina na stejného hráče
+
+  function nearAlertTimes(){
+    try{return JSON.parse(localStorage.getItem("alkoliga_near_alert_times")||"{}")}catch(e){return {}}
+  }
+  function canNearAlert(person){
+    const last=Number(nearAlertTimes()[person]||0);
+    return Date.now()-last>=NEAR_SPAM_MS;
+  }
+  function markNearAlert(person){
+    const x=nearAlertTimes();
+    x[person]=Date.now();
+    localStorage.setItem("alkoliga_near_alert_times",JSON.stringify(x));
+  }
+
   function triggerNearAlert(person,distance){
+    if(!canNearAlert(person)) return false;
+    markNearAlert(person);
     const alertBox=$("#nearAlert");
     const msg=`🍺 ${person} je asi ${Math.round(distance)} m od tebe!`;
     alertBox.classList.add("alerting");
     setTimeout(()=>alertBox.classList.remove("alerting"),1800);
     playNearSound();
     vibrateNear();
-    nearAlertCooldownUntil=Date.now()+8000;
     $("#nearText").textContent=msg;
     const toast=$("#nearToast");
     toast.textContent=msg; toast.classList.add("show");
     clearTimeout(nearToastTimer);
     nearToastTimer=setTimeout(()=>toast.classList.remove("show"),4500);
+    return true;
   }
 
   function refreshLocationUI(){
@@ -741,29 +759,45 @@
       $("#nearText").textContent=limit?"Zapni sdílení polohy, ať můžeme hledat kámoše poblíž.":"Upozornění na blízkost je vypnuté.";
       return;
     }
-    const allDistances=PLAYERS.filter(p=>p!==state.player && liveLocations[p] && Date.now()-new Date(liveLocations[p].ts).getTime()<15*60*1000)
-      .map(p=>({p,d:haversine(me,liveLocations[p])}))
+
+    const now=Date.now();
+    const allDistances=PLAYERS
+      .filter(p=>p!==state.player && liveLocations[p] && now-new Date(liveLocations[p].ts).getTime()<15*60*1000)
+      .map(p=>({p,d:haversine(me,liveLocations[p]),sessionId:liveLocations[p].sessionId||""}))
       .sort((a,b)=>a.d-b.d);
     const nearby=allDistances.filter(x=>x.d<=limit);
-
-    // Upozornění pouze při skutečném vstupu do okruhu 1,5 km.
-    // Pokud už je hráč uvnitř při spuštění aplikace, alarm se nespustí.
     const nowInside=new Set(nearby.map(x=>x.p));
-    const now=Date.now();
 
     if(!nearStateInitialized){
       insideNearRadius.clear();
       nowInside.forEach(p=>insideNearRadius.add(p));
+      PLAYERS.forEach(p=>{
+        if(p!==state.player && liveLocations[p]) lastSeenSession[p]=liveLocations[p].sessionId||"";
+      });
       nearStateInitialized=true;
       $("#nearText").textContent=nearby.length?`🍺 ${nearby[0].p} je asi ${Math.round(nearby[0].d)} m od tebe.`:"Zatím nikdo z party není do 1,5 km.";
       return;
     }
 
-    const candidate=nearby.find(x=>!insideNearRadius.has(x.p));
+    // 1) Hráč skutečně překročil hranici z >1,5 km na <=1,5 km.
+    const crossedIn=nearby.find(x=>!insideNearRadius.has(x.p) && canNearAlert(x.p));
+
+    // 2) Hráč otevřel / znovu spustil aplikaci a začal sdílet polohu,
+    //    přičemž už je v okruhu. Každé spuštění má vlastní sessionId.
+    const newlyOnline=nearby.find(x=>{
+      if(!x.sessionId) return false;
+      const previous=lastSeenSession[x.p]||"";
+      return previous && previous!==x.sessionId && canNearAlert(x.p);
+    });
+
     insideNearRadius.clear();
     nowInside.forEach(p=>insideNearRadius.add(p));
+    PLAYERS.forEach(p=>{
+      if(p!==state.player && liveLocations[p]) lastSeenSession[p]=liveLocations[p].sessionId||"";
+    });
 
-    if(candidate && now>=nearAlertCooldownUntil) triggerNearAlert(candidate.p,candidate.d);
+    const candidate=newlyOnline||crossedIn;
+    if(candidate) triggerNearAlert(candidate.p,candidate.d);
     else $("#nearText").textContent=nearby.length?`🍺 ${nearby[0].p} je asi ${Math.round(nearby[0].d)} m od tebe.`:"Zatím nikdo z party není do 1,5 km.";
   }
 
@@ -783,7 +817,7 @@
     locationWatchId=navigator.geolocation.watchPosition(pos=>{
       const lat=pos.coords.latitude,lon=pos.coords.longitude;
       $("#locStatus").textContent=`Sdílíš polohu: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-      locationsRef.doc(state.player).set({player:state.player,lat,lon,accuracy:pos.coords.accuracy,ts:new Date().toISOString()}).catch(console.error);
+      locationsRef.doc(state.player).set({player:state.player,lat,lon,accuracy:pos.coords.accuracy,sessionId:locationSessionId,onlineSince:new Date().toISOString(),ts:new Date().toISOString()},{merge:true}).catch(console.error);
     },()=>{$("#locStatus").textContent="Přístup k poloze nebyl povolen.";e.target.checked=false},{enableHighAccuracy:true,maximumAge:10000,timeout:10000});
   });
 

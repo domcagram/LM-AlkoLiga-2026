@@ -1,4 +1,4 @@
-const CACHE = "alkoliga-pwa-v1";
+const CACHE = "alkoliga-pwa-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
