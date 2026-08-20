@@ -52,6 +52,8 @@
     .feedback{min-height:20px;text-align:center;color:#f2cf8a;font-size:.88rem;margin-top:8px}
     .near{margin-top:12px;border:1px solid #5d431d;background:#221a0e;border-radius:16px;padding:13px;transition:.2s ease}
     .near.alerting{border-color:#d89b2b;box-shadow:0 0 0 2px rgba(216,155,43,.18),0 0 24px rgba(216,155,43,.15);transform:scale(1.01)}
+    .near-toast{position:fixed;left:50%;top:18px;transform:translate(-50%,-140%);z-index:2000;width:min(520px,calc(100% - 24px));background:#2a2418;border:1px solid #d89b2b;color:#ffd98f;border-radius:18px;padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.38);font-weight:800;text-align:center;transition:transform .25s ease}
+    .near-toast.show{transform:translate(-50%,0)}
     .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 12px}
     .tab{background:transparent;color:var(--muted);border:1px solid var(--line);padding:8px 11px;border-radius:999px}
     .tab.active{color:#17110a;background:var(--accent);border-color:var(--accent)}
@@ -228,7 +230,7 @@
         <div class="row between" style="margin-top:10px">
           <span class="mini">Upozorni mě do vzdálenosti</span>
           <select id="nearDistance">
-            <option>250 m</option><option>500 m</option><option selected>1 km</option><option>3 km</option><option>Vypnuto</option>
+            <option selected>1,5 km</option>
           </select>
         </div>
       </div>
@@ -247,6 +249,8 @@
     <button class="nav" data-target="map"><span class="ico">📍</span>Mapa</button>
     <button class="nav" data-target="history"><span class="ico">📜</span>Historie</button>
   </nav>
+
+  <div class="near-toast" id="nearToast" role="status" aria-live="assertive"></div>
 
   <div class="overlay" id="sosOverlay" aria-live="assertive">
     <div class="soscard">
@@ -697,18 +701,25 @@
   }
   function nearLimit(){
     const v=$("#nearDistance").value;
-    return {"250 m":250,"500 m":500,"1 km":1000,"3 km":3000}[v]||0;
+    return {"1,5 km":1500}[v]||0;
   }
   const insideNearRadius=new Set();
+  let nearStateInitialized=false;
   let nearAlertCooldownUntil=0;
+  let nearToastTimer=null;
   function triggerNearAlert(person,distance){
     const alertBox=$("#nearAlert");
+    const msg=`🍺 ${person} je asi ${Math.round(distance)} m od tebe!`;
     alertBox.classList.add("alerting");
-    setTimeout(()=>alertBox.classList.remove("alerting"),1400);
+    setTimeout(()=>alertBox.classList.remove("alerting"),1800);
     playNearSound();
     vibrateNear();
     nearAlertCooldownUntil=Date.now()+8000;
-    $("#nearText").textContent=`🍺 ${person} je asi ${Math.round(distance)} m od tebe!`;
+    $("#nearText").textContent=msg;
+    const toast=$("#nearToast");
+    toast.textContent=msg; toast.classList.add("show");
+    clearTimeout(nearToastTimer);
+    nearToastTimer=setTimeout(()=>toast.classList.remove("show"),4500);
   }
 
   function refreshLocationUI(){
@@ -717,6 +728,7 @@
     const limit=nearLimit();
     if(!me || !limit){
       insideNearRadius.clear();
+      nearStateInitialized=false;
       $("#nearText").textContent=limit?"Zapni sdílení polohy, ať můžeme hledat kámoše poblíž.":"Upozornění na blízkost je vypnuté.";
       return;
     }
@@ -725,12 +737,25 @@
       .sort((a,b)=>a.d-b.d);
     const nearby=allDistances.filter(x=>x.d<=limit);
 
-    // Zvuk + vibrace pouze při vstupu hráče do zvoleného okruhu, ne při každé aktualizaci GPS.
+    // Upozornění pouze při skutečném vstupu do okruhu 1,5 km.
+    // Pokud už je hráč uvnitř při spuštění aplikace, alarm se nespustí.
     const nowInside=new Set(nearby.map(x=>x.p));
-    const newcomer=nearby.find(x=>!insideNearRadius.has(x.p));
-    insideNearRadius.clear(); nowInside.forEach(p=>insideNearRadius.add(p));
-    if(newcomer && Date.now()>=nearAlertCooldownUntil) triggerNearAlert(newcomer.p,newcomer.d);
-    else $("#nearText").textContent=nearby.length?`🍺 ${nearby[0].p} je asi ${Math.round(nearby[0].d)} m od tebe.`:"Zatím nikdo z party není v nastavené vzdálenosti.";
+    const now=Date.now();
+
+    if(!nearStateInitialized){
+      insideNearRadius.clear();
+      nowInside.forEach(p=>insideNearRadius.add(p));
+      nearStateInitialized=true;
+      $("#nearText").textContent=nearby.length?`🍺 ${nearby[0].p} je asi ${Math.round(nearby[0].d)} m od tebe.`:"Zatím nikdo z party není do 1,5 km.";
+      return;
+    }
+
+    const candidate=nearby.find(x=>!insideNearRadius.has(x.p));
+    insideNearRadius.clear();
+    nowInside.forEach(p=>insideNearRadius.add(p));
+
+    if(candidate && now>=nearAlertCooldownUntil) triggerNearAlert(candidate.p,candidate.d);
+    else $("#nearText").textContent=nearby.length?`🍺 ${nearby[0].p} je asi ${Math.round(nearby[0].d)} m od tebe.`:"Zatím nikdo z party není do 1,5 km.";
   }
 
   $("#nearDistance").addEventListener("change",refreshLocationUI);
@@ -744,6 +769,8 @@
     }
     if(!state.player){$("#locStatus").textContent="Nejdřív vyber hráče.";e.target.checked=false;return;}
     if(!navigator.geolocation){$("#locStatus").textContent="Tento prohlížeč polohu nepodporuje.";e.target.checked=false;return;}
+    // Zapnutí polohy je přímé gesto uživatele, takže je ideální chvíle odemknout zvuk.
+    primeAudio();
     locationWatchId=navigator.geolocation.watchPosition(pos=>{
       const lat=pos.coords.latitude,lon=pos.coords.longitude;
       $("#locStatus").textContent=`Sdílíš polohu: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
