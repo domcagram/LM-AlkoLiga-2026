@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#171717" />
   <title>AlkoLiga 2026</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root{
       --bg:#0d0d0f; --panel:#17171b; --panel2:#202026; --line:#2d2d34;
@@ -75,6 +76,12 @@
     .mapgrid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:28px 28px}
     .pin{position:absolute;transform:translate(-50%,-50%);padding:7px 9px;border-radius:999px;background:#151519;border:1px solid var(--line);font-size:.8rem;white-space:nowrap}
     .pin.me{border-color:var(--accent);color:#ffd98f}
+    #liveMap{height:340px;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#141418}
+    .leaflet-container{font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#17171b;color:#f6f4ef}
+    .map-legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .map-person{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:7px 10px;font-size:.78rem;color:var(--muted)}
+    .map-person.online{border-color:#315d43;color:#a7f3d0}
     .switch{display:flex;gap:10px;align-items:center}
     .switch input{width:20px;height:20px;accent-color:var(--accent)}
     .bottom{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);width:min(732px,calc(100% - 20px));z-index:30;background:rgba(23,23,27,.96);backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:20px;padding:6px;display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
@@ -109,6 +116,7 @@
 </head>
 <body>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
@@ -212,14 +220,8 @@
         <label class="switch"><input type="checkbox" id="shareLocation"> <span>Sdílet moji polohu</span></label>
         <div class="mini" id="locStatus" style="margin-top:8px">Poloha není zapnutá.</div>
       </div>
-      <div class="mapbox" style="margin-top:12px">
-        <div class="mapgrid"></div>
-        <div class="pin me" style="left:50%;top:52%" id="mePin">📍 Ty</div>
-        <div class="pin" style="left:27%;top:33%" id="pin-Štof">Štof · offline</div>
-        <div class="pin" style="left:71%;top:67%" id="pin-Dejv">Dejv · offline</div>
-        <div class="pin" style="left:64%;top:26%" id="pin-Hnilda">Hnilda · offline</div>
-        <div class="pin" style="left:38%;top:72%" id="pin-Domes">Domes · offline</div>
-      </div>
+      <div id="liveMap" style="margin-top:12px" aria-label="Živá mapa hráčů"></div>
+      <div class="map-legend" id="mapLegend"></div>
       <div class="card" style="margin-top:12px">
         <h3>Upozornění v okolí</h3>
         <div class="row between" style="margin-top:10px">
@@ -339,6 +341,67 @@
   const $$ = s => [...document.querySelectorAll(s)];
   const saveCache = () => localStorage.setItem("alkoliga_entries", JSON.stringify(state.entries));
   const fmt = n => Number(n).toLocaleString("cs-CZ",{maximumFractionDigits:2});
+
+  let liveMap=null;
+  const mapMarkers={};
+  let mapCenteredOnMe=false;
+  function initLiveMap(){
+    if(liveMap || typeof L==="undefined") return;
+    liveMap=L.map("liveMap",{zoomControl:true}).setView([49.8175,15.4730],7);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+      maxZoom:19,
+      attribution:'&copy; OpenStreetMap contributors'
+    }).addTo(liveMap);
+    setTimeout(()=>liveMap.invalidateSize(),120);
+  }
+  function markerIcon(player,isMe){
+    const label=(player||"?").slice(0,2);
+    return L.divIcon({
+      className:"",
+      html:`<div style="min-width:42px;height:42px;padding:0 8px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:900;border:3px solid ${isMe?'#d89b2b':'#ffffff'};background:#17171b;color:#fff;box-shadow:0 3px 12px rgba(0,0,0,.45)">${label}</div>`,
+      iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-22]
+    });
+  }
+  function renderLiveMap(){
+    initLiveMap();
+    if(!liveMap) return;
+    const now=Date.now();
+    const activePlayers=[];
+    PLAYERS.forEach(p=>{
+      const loc=liveLocations[p];
+      const fresh=loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon) && now-new Date(loc.ts).getTime()<15*60*1000;
+      if(!fresh){
+        if(mapMarkers[p]){liveMap.removeLayer(mapMarkers[p]);delete mapMarkers[p];}
+        return;
+      }
+      activePlayers.push(p);
+      const latlng=[loc.lat,loc.lon];
+      if(!mapMarkers[p]){
+        mapMarkers[p]=L.marker(latlng,{icon:markerIcon(p,p===state.player)}).addTo(liveMap);
+      }else{
+        mapMarkers[p].setLatLng(latlng);
+        mapMarkers[p].setIcon(markerIcon(p,p===state.player));
+      }
+      const ago=Math.max(0,Math.round((now-new Date(loc.ts).getTime())/60000));
+      mapMarkers[p].bindPopup(`<strong>${p}</strong><br>${p===state.player?'Tvoje poloha':'Sdílí polohu'}<br><small>Aktualizováno před ${ago} min</small>`);
+      if(p===state.player && !mapCenteredOnMe){
+        liveMap.setView(latlng,16);
+        mapCenteredOnMe=true;
+      }
+    });
+    const legend=$("#mapLegend");
+    if(legend){
+      legend.innerHTML=PLAYERS.map(p=>{
+        const loc=liveLocations[p];
+        const fresh=loc && now-new Date(loc.ts).getTime()<15*60*1000;
+        return `<span class="map-person${fresh?' online':''}">${fresh?'●':'○'} ${p}${p===state.player?' (ty)':''}</span>`;
+      }).join("");
+    }
+    if(activePlayers.length>1 && !liveLocations[state.player]){
+      const group=L.featureGroup(activePlayers.map(p=>mapMarkers[p]).filter(Boolean));
+      if(group.getLayers().length) liveMap.fitBounds(group.getBounds().pad(.25),{maxZoom:15});
+    }
+  }
 
   function startOfWeek(d){
     const x=new Date(d); const day=(x.getDay()+6)%7;
@@ -518,6 +581,7 @@
   $$(".nav").forEach(b=>b.addEventListener("click",()=>{
     $$(".nav").forEach(x=>x.classList.remove("active")); b.classList.add("active");
     $$(".screen").forEach(x=>x.classList.remove("active")); document.querySelector(`[data-screen="${b.dataset.target}"]`).classList.add("active");
+    if(b.dataset.target==="map"){initLiveMap();setTimeout(()=>{liveMap?.invalidateSize();renderLiveMap()},80);}
   }));
 
   $$("#playerModal [data-player]").forEach(b=>b.addEventListener("click",()=>{
@@ -592,19 +656,14 @@
     return {"250 m":250,"500 m":500,"1 km":1000,"3 km":3000}[v]||0;
   }
   function refreshLocationUI(){
-    PLAYERS.forEach((p,i)=>{
-      const pin=document.getElementById(`pin-${p}`);
-      if(!pin) return;
-      if(p===state.player){pin.style.display="none";return;}
-      pin.style.display="block";
-      const loc=liveLocations[p];
-      if(loc && Date.now()-new Date(loc.ts).getTime()<15*60*1000) pin.textContent=`${p} · online`;
-      else pin.textContent=`${p} · offline`;
-    });
+    renderLiveMap();
     const me=liveLocations[state.player];
     const limit=nearLimit();
-    if(!me || !limit){$("#nearText").textContent=limit?"Zapni sdílení polohy, ať můžeme hledat kámoše poblíž.":"Upozornění na blízkost je vypnuté.";return;}
-    const nearby=PLAYERS.filter(p=>p!==state.player && liveLocations[p])
+    if(!me || !limit){
+      $("#nearText").textContent=limit?"Zapni sdílení polohy, ať můžeme hledat kámoše poblíž.":"Upozornění na blízkost je vypnuté.";
+      return;
+    }
+    const nearby=PLAYERS.filter(p=>p!==state.player && liveLocations[p] && Date.now()-new Date(liveLocations[p].ts).getTime()<15*60*1000)
       .map(p=>({p,d:haversine(me,liveLocations[p])}))
       .filter(x=>x.d<=limit)
       .sort((a,b)=>a.d-b.d);
@@ -618,7 +677,6 @@
       locationWatchId=null;
       if(state.player) locationsRef.doc(state.player).delete().catch(console.error);
       $("#locStatus").textContent="Poloha není zapnutá.";
-      $("#mePin").textContent="📍 Ty";
       return;
     }
     if(!state.player){$("#locStatus").textContent="Nejdřív vyber hráče.";e.target.checked=false;return;}
@@ -626,7 +684,6 @@
     locationWatchId=navigator.geolocation.watchPosition(pos=>{
       const lat=pos.coords.latitude,lon=pos.coords.longitude;
       $("#locStatus").textContent=`Sdílíš polohu: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-      $("#mePin").textContent=`📍 ${state.player}`;
       locationsRef.doc(state.player).set({player:state.player,lat,lon,accuracy:pos.coords.accuracy,ts:new Date().toISOString()}).catch(console.error);
     },()=>{$("#locStatus").textContent="Přístup k poloze nebyl povolen.";e.target.checked=false},{enableHighAccuracy:true,maximumAge:10000,timeout:10000});
   });
@@ -660,7 +717,7 @@
     refreshLocationUI();
   },err=>console.error("Locations listener",err));
 
-  renderOptions(); renderAll();
+  renderOptions(); renderAll(); initLiveMap(); renderLiveMap();
 })();
 </script>
 </body>
