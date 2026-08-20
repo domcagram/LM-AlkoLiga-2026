@@ -50,7 +50,8 @@
     .danger{width:100%;border:0;border-radius:16px;background:var(--danger);color:white;padding:14px;font-weight:800}
     .ghost{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:13px;padding:10px 12px}
     .feedback{min-height:20px;text-align:center;color:#f2cf8a;font-size:.88rem;margin-top:8px}
-    .near{margin-top:12px;border:1px solid #5d431d;background:#221a0e;border-radius:16px;padding:13px}
+    .near{margin-top:12px;border:1px solid #5d431d;background:#221a0e;border-radius:16px;padding:13px;transition:.2s ease}
+    .near.alerting{border-color:#d89b2b;box-shadow:0 0 0 2px rgba(216,155,43,.18),0 0 24px rgba(216,155,43,.15);transform:scale(1.01)}
     .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 12px}
     .tab{background:transparent;color:var(--muted);border:1px solid var(--line);padding:8px 11px;border-radius:999px}
     .tab.active{color:#17110a;background:var(--accent);border-color:var(--accent)}
@@ -171,7 +172,7 @@
 
       <div class="near" id="nearAlert">
         <strong>🍺 Kámoš chlastá poblíž</strong>
-        <div class="mini" id="nearText" style="margin-top:4px">Zatím nikdo poblíž nesdílí polohu.</div>
+        <div class="mini" id="nearText" style="margin-top:4px">Zapni sdílení polohy. Při vstupu kámoše do nastaveného okruhu zazní zvuk a telefon zavibruje.</div>
       </div>
     </section>
 
@@ -604,6 +605,48 @@
     clearInterval(sirenTimer);
     try{osc&&osc.stop();audioCtx&&audioCtx.close()}catch(e){}
     osc=gain=audioCtx=null;
+    if(sosVibeTimer){clearInterval(sosVibeTimer);sosVibeTimer=null;}
+    if(navigator.vibrate) navigator.vibrate(0);
+  }
+
+  // Mobilní prohlížeče často dovolí zvuk až po prvním dotyku uživatele.
+  let alertAudioCtx=null, audioPrimed=false, sosVibeTimer=null;
+  function primeAudio(){
+    if(audioPrimed) return;
+    try{
+      alertAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      if(alertAudioCtx.state==='suspended') alertAudioCtx.resume();
+      const o=alertAudioCtx.createOscillator(), g=alertAudioCtx.createGain();
+      g.gain.value=0.0001; o.connect(g); g.connect(alertAudioCtx.destination);
+      o.start(); o.stop(alertAudioCtx.currentTime+0.02);
+      audioPrimed=true;
+    }catch(e){}
+  }
+  ['pointerdown','touchstart','click'].forEach(ev=>document.addEventListener(ev,primeAudio,{once:true,passive:true}));
+
+  function playNearSound(){
+    try{
+      if(!alertAudioCtx) alertAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      if(alertAudioCtx.state==='suspended') alertAudioCtx.resume();
+      const now=alertAudioCtx.currentTime;
+      [0,0.16].forEach((delay,i)=>{
+        const o=alertAudioCtx.createOscillator(), g=alertAudioCtx.createGain();
+        o.type='sine'; o.frequency.value=i?880:660;
+        g.gain.setValueAtTime(0.0001,now+delay);
+        g.gain.exponentialRampToValueAtTime(0.16,now+delay+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001,now+delay+0.13);
+        o.connect(g); g.connect(alertAudioCtx.destination);
+        o.start(now+delay); o.stop(now+delay+0.14);
+      });
+    }catch(e){}
+  }
+  function vibrateNear(){
+    if(navigator.vibrate) navigator.vibrate([180,90,180]);
+  }
+  function startSOSVibration(){
+    if(!navigator.vibrate || sosVibeTimer) return;
+    const pulse=()=>navigator.vibrate([450,160,450,500]);
+    pulse(); sosVibeTimer=setInterval(pulse,1700);
   }
 
   let holdTimer=null, holdTriggered=false;
@@ -626,6 +669,7 @@
       $("#sosLocation").textContent="📍 Poloha není dostupná.";
     }
     if(!audioCtx) startSiren();
+    startSOSVibration();
   }
 
   function activateSOS(){
@@ -655,19 +699,38 @@
     const v=$("#nearDistance").value;
     return {"250 m":250,"500 m":500,"1 km":1000,"3 km":3000}[v]||0;
   }
+  const insideNearRadius=new Set();
+  let nearAlertCooldownUntil=0;
+  function triggerNearAlert(person,distance){
+    const alertBox=$("#nearAlert");
+    alertBox.classList.add("alerting");
+    setTimeout(()=>alertBox.classList.remove("alerting"),1400);
+    playNearSound();
+    vibrateNear();
+    nearAlertCooldownUntil=Date.now()+8000;
+    $("#nearText").textContent=`🍺 ${person} je asi ${Math.round(distance)} m od tebe!`;
+  }
+
   function refreshLocationUI(){
     renderLiveMap();
     const me=liveLocations[state.player];
     const limit=nearLimit();
     if(!me || !limit){
+      insideNearRadius.clear();
       $("#nearText").textContent=limit?"Zapni sdílení polohy, ať můžeme hledat kámoše poblíž.":"Upozornění na blízkost je vypnuté.";
       return;
     }
-    const nearby=PLAYERS.filter(p=>p!==state.player && liveLocations[p] && Date.now()-new Date(liveLocations[p].ts).getTime()<15*60*1000)
+    const allDistances=PLAYERS.filter(p=>p!==state.player && liveLocations[p] && Date.now()-new Date(liveLocations[p].ts).getTime()<15*60*1000)
       .map(p=>({p,d:haversine(me,liveLocations[p])}))
-      .filter(x=>x.d<=limit)
       .sort((a,b)=>a.d-b.d);
-    $("#nearText").textContent=nearby.length?`${nearby[0].p} je asi ${Math.round(nearby[0].d)} m od tebe.`:"Zatím nikdo z party není v nastavené vzdálenosti.";
+    const nearby=allDistances.filter(x=>x.d<=limit);
+
+    // Zvuk + vibrace pouze při vstupu hráče do zvoleného okruhu, ne při každé aktualizaci GPS.
+    const nowInside=new Set(nearby.map(x=>x.p));
+    const newcomer=nearby.find(x=>!insideNearRadius.has(x.p));
+    insideNearRadius.clear(); nowInside.forEach(p=>insideNearRadius.add(p));
+    if(newcomer && Date.now()>=nearAlertCooldownUntil) triggerNearAlert(newcomer.p,newcomer.d);
+    else $("#nearText").textContent=nearby.length?`🍺 ${nearby[0].p} je asi ${Math.round(nearby[0].d)} m od tebe.`:"Zatím nikdo z party není v nastavené vzdálenosti.";
   }
 
   $("#nearDistance").addEventListener("change",refreshLocationUI);
